@@ -3,6 +3,9 @@
 
 # Source the plugin files
 export ZSH_AI_TEST_MODE=1
+# Point config loading at a non-existent file so tests never read the
+# user's real ~/.config/zsh/zsh-ai. Individual tests override this.
+export ZSH_AI_CONFIG="/nonexistent/zsh-ai-test-config"
 PLUGIN_DIR="${0:A:h:h}"
 
 # Mock functions storage
@@ -181,10 +184,12 @@ setup_test_env() {
     # Set test environment variables
     export ZSH_AI_PROVIDER=""
     export ANTHROPIC_API_KEY=""
+    export ZSH_AI_CONFIG="/nonexistent/zsh-ai-test-config"
     export ZSH_AI_MODEL=""
     unset ZSH_AI_TRIGGER
     unset ZSH_AI_COMMENT_HOOK
-    
+    unset XDG_CONFIG_HOME
+
     # Reset mocks
     reset_mocks
 }
@@ -198,9 +203,24 @@ teardown_test_env() {
     unfunction curl 2>/dev/null
     unset ZSH_AI_PROVIDER
     unset ANTHROPIC_API_KEY
+    unset GEMINI_API_KEY
+    unset OPENAI_API_KEY
+    unset QWEN_API_KEY
+    unset XAI_API_KEY
+    unset MISTRAL_API_KEY
     unset ZSH_AI_MODEL
+    unset ZSH_AI_CONFIG
+    unset XDG_CONFIG_HOME
     unset ZSH_AI_TRIGGER
     unset ZSH_AI_COMMENT_HOOK
+    unset ZSH_AI_PROMPT_EXTEND
+    unset ZSH_AI_OLLAMA_MODEL ZSH_AI_OLLAMA_URL
+    unset ZSH_AI_GEMINI_MODEL
+    unset ZSH_AI_OPENAI_MODEL ZSH_AI_OPENAI_URL ZSH_AI_OPENAI_THINKING ZSH_AI_OPENAI_REASONING_EFFORT
+    unset ZSH_AI_QWEN_MODEL ZSH_AI_QWEN_URL
+    unset ZSH_AI_ANTHROPIC_MODEL ZSH_AI_ANTHROPIC_URL
+    unset ZSH_AI_GROK_MODEL ZSH_AI_GROK_URL
+    unset ZSH_AI_MISTRAL_MODEL ZSH_AI_MISTRAL_URL
     unset ZSH_AI_TEST_MODE
 }
 

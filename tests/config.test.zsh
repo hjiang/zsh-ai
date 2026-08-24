@@ -156,6 +156,134 @@ test_default_trigger_is_hash() {
     teardown_test_env
 }
 
+# --- Config file loading tests ---
+
+make_config_file() {
+    local content="$1"
+    local file
+    file=$(mktemp)
+    printf '%s\n' "$content" > "$file"
+    printf '%s' "$file"
+}
+
+# Load a fresh copy of config.zsh against ZSH_AI_CONFIG and return the
+# value of the named variable.
+reload_config_value() {
+    local var="$1"
+    source "$PLUGIN_DIR/lib/config.zsh"
+    printf '%s' "${(P)var}"
+}
+
+test_loads_provider_from_config_file() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file "ZSH_AI_PROVIDER=gemini")
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_PROVIDER
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "gemini"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_loads_api_key_from_config_file() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file "ANTHROPIC_API_KEY=file-key")
+    export ZSH_AI_CONFIG="$cfg"
+    unset ANTHROPIC_API_KEY
+    export ZSH_AI_PROVIDER="anthropic"
+    source "$PLUGIN_DIR/lib/config.zsh"
+    assert_equals "$ANTHROPIC_API_KEY" "file-key"
+    _zsh_ai_validate_config >/dev/null 2>&1
+    assert_equals "$?" "0"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_env_var_overrides_config_file() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file "ZSH_AI_PROVIDER=gemini")
+    export ZSH_AI_CONFIG="$cfg"
+    export ZSH_AI_PROVIDER="openai"
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "openai"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_env_api_key_overrides_config_file() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file "ANTHROPIC_API_KEY=file-key")
+    export ZSH_AI_CONFIG="$cfg"
+    export ANTHROPIC_API_KEY="env-key"
+    source "$PLUGIN_DIR/lib/config.zsh"
+    assert_equals "$ANTHROPIC_API_KEY" "env-key"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_config_file_ignores_comments_and_blank_lines() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file $'# a comment
+
+   # indented comment
+
+ZSH_AI_PROVIDER=qwen
+')
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_PROVIDER
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "qwen"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_config_file_strips_surrounding_quotes() {
+    setup_test_env
+    local cfg
+    cfg=$(make_config_file 'ZSH_AI_TRIGGER=",,"')
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_TRIGGER
+    local value
+    value=$(reload_config_value ZSH_AI_TRIGGER)
+    assert_equals "$value" ",,"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_missing_config_file_uses_defaults() {
+    setup_test_env
+    export ZSH_AI_CONFIG="/nonexistent/zsh-ai-test-config"
+    unset ZSH_AI_PROVIDER
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "anthropic"
+    teardown_test_env
+}
+
+test_config_file_uses_xdg_config_home() {
+    setup_test_env
+    local xdg cfg
+    xdg=$(mktemp -d)
+    mkdir -p "$xdg/zsh"
+    printf '%s\n' "ZSH_AI_PROVIDER=mistral" > "$xdg/zsh/zsh-ai"
+    unset ZSH_AI_CONFIG
+    export XDG_CONFIG_HOME="$xdg"
+    unset ZSH_AI_PROVIDER
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "mistral"
+    rm -rf "$xdg"
+    teardown_test_env
+}
+
 # Run tests
 echo "Running config tests..."
 run_test "Default provider is anthropic" test_default_provider
@@ -171,4 +299,12 @@ run_test "Rejects missing custom provider function" test_rejects_missing_custom_
 run_test "Comment hook enabled by default" test_comment_hook_enabled_by_default
 run_test "Comment hook can be disabled" test_comment_hook_can_be_disabled
 run_test "Default trigger is '# '" test_default_trigger_is_hash
+run_test "Loads provider from config file" test_loads_provider_from_config_file
+run_test "Loads API key from config file" test_loads_api_key_from_config_file
+run_test "Env var overrides config file" test_env_var_overrides_config_file
+run_test "Env API key overrides config file" test_env_api_key_overrides_config_file
+run_test "Config file ignores comments and blank lines" test_config_file_ignores_comments_and_blank_lines
+run_test "Config file strips surrounding quotes" test_config_file_strips_surrounding_quotes
+run_test "Missing config file uses defaults" test_missing_config_file_uses_defaults
+run_test "Config file respects XDG_CONFIG_HOME" test_config_file_uses_xdg_config_home
 finish_tests
