@@ -2,6 +2,31 @@
 
 # Configuration and validation for zsh-ai
 
+# Strip an inline comment from a value. Everything from the first '#' that is
+# not inside single/double quotes to the end is removed, so
+# `"anthropic"   # note` becomes `"anthropic"` while `"#"` is kept intact.
+_zsh_ai_strip_inline_comment() {
+    local s="$1" c out="" q=""
+    local -i i
+    for (( i = 1; i <= ${#s}; i++ )); do
+        c="${s[i]}"
+        if [[ -n "$q" ]]; then
+            if [[ "$c" == "$q" ]]; then
+                q=""
+            fi
+            out+="$c"
+        elif [[ "$c" == "'" || "$c" == '"' ]]; then
+            q="$c"
+            out+="$c"
+        elif [[ "$c" == '#' ]]; then
+            break
+        else
+            out+="$c"
+        fi
+    done
+    print -rn -- "$out"
+}
+
 # Load configuration from a plain-text KEY=VALUE file so settings (and API
 # keys) don't have to live in the environment. Path is
 # $XDG_CONFIG_HOME/zsh/zsh-ai (default ~/.config/zsh/zsh-ai), overridable
@@ -26,17 +51,19 @@ _zsh_ai_load_config() {
         line="${line%%$'\r'}"                                # tolerate CRLF
         line="${line#"${line%%[![:space:]]*}"}"              # strip leading whitespace
         [[ -z "$line" || "$line" == \#* ]] && continue      # skip blanks and comments
+        [[ "$line" == *=* ]] || continue                     # ignore lines without '='
         key="${line%%=*}"
-        value="${line#*=}"
         key="${key%"${key##*[![:space:]]}"}"                # strip trailing whitespace
+        # Only accept valid identifier keys
+        [[ "$key" =~ '^[A-Za-z_][A-Za-z0-9_]*$' ]] || continue
+        value="${line#*=}"
+        value="$(_zsh_ai_strip_inline_comment "$value")"     # drop trailing # comment
         value="${value#"${value%%[![:space:]]*}"}"           # strip leading whitespace
         value="${value%"${value##*[![:space:]]}"}"           # strip trailing whitespace
         # Strip surrounding single or double quotes from the value
         if [[ ${#value} -ge 2 ]] && { [[ "$value" == \"*\" || "$value" == \'*\' ]]; }; then
             value="${value[2,-2]}"
         fi
-        # Only accept valid identifier keys
-        [[ "$key" =~ '^[A-Za-z_][A-Za-z0-9_]*$' ]] || continue
         # Never clobber a value already set in the environment
         if [[ -z "${(P)key}" ]]; then
             typeset -g "$key"="$value"

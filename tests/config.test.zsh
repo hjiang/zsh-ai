@@ -284,6 +284,52 @@ test_config_file_uses_xdg_config_home() {
     teardown_test_env
 }
 
+test_config_file_inline_comment() {
+    setup_test_env
+    local cfg
+    cfg=$(mktemp)
+    printf '%s\n' 'ZSH_AI_PROVIDER="gemini"   # team default' > "$cfg"
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_PROVIDER
+    local value
+    value=$(reload_config_value ZSH_AI_PROVIDER)
+    assert_equals "$value" "gemini"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_config_file_keeps_hash_inside_quotes() {
+    setup_test_env
+    local cfg
+    cfg=$(mktemp)
+    printf '%s\n' 'ZSH_AI_TRIGGER="#"' > "$cfg"
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_TRIGGER
+    local value
+    value=$(reload_config_value ZSH_AI_TRIGGER)
+    assert_equals "$value" "#"
+    rm -f "$cfg"
+    teardown_test_env
+}
+
+test_config_file_ignores_lines_without_equals() {
+    setup_test_env
+    local cfg
+    cfg=$(mktemp)
+    printf '%s\n' 'ZSH_AI_PROVIDER=gemini' 'MALFORMED_NO_EQUALS' 'ZSH_AI_TRIGGER=",,"' > "$cfg"
+    export ZSH_AI_CONFIG="$cfg"
+    unset ZSH_AI_PROVIDER ZSH_AI_TRIGGER MALFORMED_NO_EQUALS
+    source "$PLUGIN_DIR/lib/config.zsh"
+    assert_equals "$ZSH_AI_PROVIDER" "gemini"
+    assert_equals "$ZSH_AI_TRIGGER" ",,"
+    if (( $+MALFORMED_NO_EQUALS )); then
+        echo "FAIL: line without '=' should be ignored"
+        return 1
+    fi
+    rm -f "$cfg"
+    teardown_test_env
+}
+
 # Run tests
 echo "Running config tests..."
 run_test "Default provider is anthropic" test_default_provider
@@ -307,4 +353,7 @@ run_test "Config file ignores comments and blank lines" test_config_file_ignores
 run_test "Config file strips surrounding quotes" test_config_file_strips_surrounding_quotes
 run_test "Missing config file uses defaults" test_missing_config_file_uses_defaults
 run_test "Config file respects XDG_CONFIG_HOME" test_config_file_uses_xdg_config_home
+run_test "Config file handles inline comment" test_config_file_inline_comment
+run_test "Config file keeps # inside quotes" test_config_file_keeps_hash_inside_quotes
+run_test "Config file ignores lines without '='" test_config_file_ignores_lines_without_equals
 finish_tests
