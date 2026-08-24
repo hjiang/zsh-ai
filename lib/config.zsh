@@ -2,6 +2,80 @@
 
 # Configuration and validation for zsh-ai
 
+# Strip an inline comment from a value. Everything from the first '#' that is
+# not inside single/double quotes to the end is removed, so
+# `"anthropic"   # note` becomes `"anthropic"` while `"#"` is kept intact.
+_zsh_ai_strip_inline_comment() {
+    local s="$1" c out="" q=""
+    local -i i
+    for (( i = 1; i <= ${#s}; i++ )); do
+        c="${s[i]}"
+        if [[ -n "$q" ]]; then
+            if [[ "$c" == "$q" ]]; then
+                q=""
+            fi
+            out+="$c"
+        elif [[ "$c" == "'" || "$c" == '"' ]]; then
+            q="$c"
+            out+="$c"
+        elif [[ "$c" == '#' ]]; then
+            break
+        else
+            out+="$c"
+        fi
+    done
+    print -rn -- "$out"
+}
+
+# Load configuration from a plain-text KEY=VALUE file so settings (and API
+# keys) don't have to live in the environment. Path is
+# $XDG_CONFIG_HOME/zsh/zsh-ai (default ~/.config/zsh/zsh-ai), overridable
+# with ZSH_AI_CONFIG. Values are loaded as non-exported shell parameters, so
+# API keys don't leak into child processes. An env var that is already set
+# (non-empty) takes precedence over the file; the file only fills unset
+# values.
+_zsh_ai_load_config() {
+    local config_file
+    if [[ -n "$ZSH_AI_CONFIG" ]]; then
+        config_file="$ZSH_AI_CONFIG"
+    elif [[ -n "$XDG_CONFIG_HOME" ]]; then
+        config_file="$XDG_CONFIG_HOME/zsh/zsh-ai"
+    else
+        config_file="$HOME/.config/zsh/zsh-ai"
+    fi
+
+    [[ -f "$config_file" ]] || return 0
+
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%%$'\r'}"                                # tolerate CRLF
+        line="${line#"${line%%[![:space:]]*}"}"              # strip leading whitespace
+        [[ -z "$line" || "$line" == \#* ]] && continue      # skip blanks and comments
+        [[ "$line" == *=* ]] || continue                     # ignore lines without '='
+        key="${line%%=*}"
+        key="${key%"${key##*[![:space:]]}"}"                # strip trailing whitespace
+        # Only accept valid identifier keys
+        [[ "$key" =~ '^[A-Za-z_][A-Za-z0-9_]*$' ]] || continue
+        value="${line#*=}"
+        value="$(_zsh_ai_strip_inline_comment "$value")"     # drop trailing # comment
+        value="${value#"${value%%[![:space:]]*}"}"           # strip leading whitespace
+        value="${value%"${value##*[![:space:]]}"}"           # strip trailing whitespace
+        # Strip surrounding single or double quotes from the value
+        if [[ ${#value} -ge 2 ]] && { [[ "$value" == \"*\" || "$value" == \'*\' ]]; }; then
+            value="${value[2,-2]}"
+        fi
+        # Never clobber a value already set in the environment
+        if [[ -z "${(P)key}" ]]; then
+            typeset -g "$key"="$value"
+        fi
+    done < "$config_file"
+    return 0
+}
+
+# Load the config file before applying defaults: file values beat defaults but
+# lose to env vars that are already set.
+_zsh_ai_load_config
+
 # Set default values for configuration
 : ${ZSH_AI_PROVIDER:="anthropic"}  # Default to anthropic for backwards compatibility
 : ${ZSH_AI_OLLAMA_MODEL:="llama3.2"}  # Popular fast model
@@ -47,13 +121,13 @@ _zsh_ai_validate_config() {
     if [[ "$ZSH_AI_PROVIDER" == "anthropic" ]]; then
         if [[ -z "$ANTHROPIC_API_KEY" ]]; then
             echo "zsh-ai: Warning: ANTHROPIC_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set ANTHROPIC_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set ANTHROPIC_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$ZSH_AI_PROVIDER" == "gemini" ]]; then
         if [[ -z "$GEMINI_API_KEY" ]]; then
             echo "zsh-ai: Warning: GEMINI_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set GEMINI_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set GEMINI_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$ZSH_AI_PROVIDER" == "openai" ]]; then
@@ -61,7 +135,7 @@ _zsh_ai_validate_config() {
         # Custom URLs (local servers, proxies) may not need authentication
         if [[ -z "$OPENAI_API_KEY" && -z "$ZSH_AI_OPENAI_API_KEY" && "$ZSH_AI_OPENAI_URL" == "https://api.openai.com/v1/chat/completions" ]]; then
             echo "zsh-ai: Warning: OPENAI_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set OPENAI_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set OPENAI_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
 
@@ -73,19 +147,19 @@ _zsh_ai_validate_config() {
     elif [[ "$ZSH_AI_PROVIDER" == "qwen" ]]; then
         if [[ -z "$QWEN_API_KEY" ]]; then
             echo "zsh-ai: Warning: QWEN_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set QWEN_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set QWEN_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$ZSH_AI_PROVIDER" == "grok" ]]; then
         if [[ -z "$XAI_API_KEY" ]]; then
             echo "zsh-ai: Warning: XAI_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set XAI_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set XAI_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$ZSH_AI_PROVIDER" == "mistral" ]]; then
         if [[ -z "$MISTRAL_API_KEY" ]]; then
             echo "zsh-ai: Warning: MISTRAL_API_KEY not set. Plugin will not function."
-            echo "zsh-ai: Set MISTRAL_API_KEY or use ZSH_AI_PROVIDER=ollama for local models."
+            echo "zsh-ai: Set MISTRAL_API_KEY in ~/.config/zsh/zsh-ai or export it, or use ZSH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$ZSH_AI_PROVIDER" == "custom" ]]; then

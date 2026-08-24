@@ -29,14 +29,24 @@ It is also small by design: zsh plus `curl` and `perl`, no Node runtime, no Pyth
 brew install matheusml/zsh-ai/zsh-ai
 ```
 
-Add this to `~/.zshrc`, with the API key above the `source` line:
+Add this to `~/.zshrc`, then create the config file `~/.config/zsh/zsh-ai`
+with your API key:
 
 ```bash
-export ANTHROPIC_API_KEY="your-key-here"
+# ~/.zshrc
 source $(brew --prefix)/share/zsh-ai/zsh-ai.plugin.zsh
 ```
 
-Keep API keys out of public dotfiles.
+```bash
+# ~/.config/zsh/zsh-ai
+ANTHROPIC_API_KEY="your-key-here"
+```
+
+Keep API keys out of public dotfiles and restrict the config file:
+
+```bash
+chmod 600 ~/.config/zsh/zsh-ai
+```
 
 Reload your shell:
 
@@ -54,10 +64,12 @@ Prefer a local model on your machine?
 
 ```bash
 ollama pull llama3.2
-export ZSH_AI_PROVIDER="ollama"
 ```
 
-Put the Ollama provider line above the `zsh-ai` source line.
+```bash
+# ~/.config/zsh/zsh-ai
+ZSH_AI_PROVIDER="ollama"
+```
 
 Full setup lives in [INSTALL.md](INSTALL.md).
 
@@ -93,14 +105,21 @@ The command is pushed into your prompt with `print -z`, ready to edit or run.
 
 ## Configuration
 
-Switch providers with `ZSH_AI_PROVIDER`:
+Settings live in `~/.config/zsh/zsh-ai` (or `$XDG_CONFIG_HOME/zsh/zsh-ai`). It
+is a plain `KEY=VALUE` file; `#` starts a comment. The file is loaded without
+exporting, so API keys never leak into child process environments.
+
+Switch providers by editing the file:
 
 ```bash
-export ZSH_AI_PROVIDER="openai"
-export OPENAI_API_KEY="your-key-here"
+# ~/.config/zsh/zsh-ai
+ZSH_AI_PROVIDER="openai"
+OPENAI_API_KEY="your-key-here"
 ```
 
-OpenAI-compatible endpoints can also pass provider-specific reasoning controls:
+Any `ZSH_AI_*` or provider API key env var that is already set in your shell
+takes precedence over the file — handy for per-shell, per-project, or
+secrets-manager overrides:
 
 ```bash
 export ZSH_AI_OPENAI_REASONING_EFFORT="none"
@@ -109,18 +128,20 @@ export ZSH_AI_OPENAI_REASONING_EFFORT="none"
 Add command preferences without replacing the built-in quoting rules:
 
 ```bash
-export ZSH_AI_PROMPT_EXTEND="Prefer rg over grep, fd over find, and bat over cat."
+# ~/.config/zsh/zsh-ai
+ZSH_AI_PROMPT_EXTEND="Prefer rg over grep, fd over find, and bat over cat."
 ```
 
 Change the inline trigger, or disable the comment hook altogether (handy when you
 paste code blocks that start with `#` comments):
 
 ```bash
+# ~/.config/zsh/zsh-ai
 # Use ,, instead of "# " to start a query
-export ZSH_AI_TRIGGER=",,"
+ZSH_AI_TRIGGER=",,"
 
 # Disable the inline hook entirely; only `zsh-ai "..."` stays active
-export ZSH_AI_COMMENT_HOOK="false"
+ZSH_AI_COMMENT_HOOK="false"
 ```
 
 ## Docs

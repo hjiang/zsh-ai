@@ -12,13 +12,24 @@ zsh-ai "show current date"
 zsh-ai: Warning: ANTHROPIC_API_KEY not set. Plugin will not function.
 ```
 
-Set the key for your provider:
+Set the key for your provider in the config file `~/.config/zsh/zsh-ai`:
+
+```bash
+# ~/.config/zsh/zsh-ai
+ANTHROPIC_API_KEY="your-key"
+```
+
+```bash
+chmod 600 ~/.config/zsh/zsh-ai
+```
+
+Or export it in your shell (exports override the config file):
 
 ```bash
 export ANTHROPIC_API_KEY="your-key"
 ```
 
-For permanent setup, put the key above the `zsh-ai` load line in a private `~/.zshrc`.
+For permanent setup, put the key in the config file or above the `zsh-ai` load line in a private `~/.zshrc`.
 
 Or switch to Ollama:
 
